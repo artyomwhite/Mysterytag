@@ -1,0 +1,60 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8080:80"
+    environment:
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_NAME: postback
+      DB_USER: postback
+      DB_PASSWORD: secret
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      PARTNER_API_URL: http://partner-mock:8081/api/events
+      PARTNER_TIMEOUT: "3"
+      PARTNER_MAX_ATTEMPTS: "3"
+      PARTNER_RETRY_DELAY_MS: "200"
+      DEDUP_TTL: "86400"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      partner-mock:
+        condition: service_started
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: rootsecret
+      MYSQL_DATABASE: postback
+      MYSQL_USER: postback
+      MYSQL_PASSWORD: secret
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  partner-mock:
+    image: php:8.3-cli
+    working_dir: /app
+    volumes:
+      - ./mock-partner:/app
+    command: php -S 0.0.0.0:8081 index.php
+    ports:
+      - "8081:8081"
+
+volumes:
+  mysql_data:
